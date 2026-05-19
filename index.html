@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CinemaMax</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: #07070d;
+      color: #fff;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ──────────────────────────────────────────────── */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid #ff1a1a;
+      flex-shrink: 0;
+      background: #07070d;
+      gap: 10px;
+      min-height: 52px;
+    }
+
+    .logo { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+    .logo-icon { color: #ff1a1a; font-size: 17px; }
+    .logo-cine { color: white;   font-size: 15px; font-weight: bold; }
+    .logo-max  { color: #ff1a1a; font-size: 15px; font-weight: bold; }
+
+    .step-bar {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      justify-content: center;
+      gap: 0;
+      overflow: hidden;
+    }
+    .step-item {
+      font-size: 9px;
+      font-weight: bold;
+      padding: 3px 6px;
+      border-radius: 20px;
+      white-space: nowrap;
+      transition: color 0.3s;
+    }
+    .step-active   { color: white;  border: 1px solid #ff1a1a; }
+    .step-done     { color: #ff1a1a; }
+    .step-inactive { color: rgba(255,255,255,0.35); }
+    .step-connector { width: 14px; height: 1px; background: rgba(255,255,255,0.25); flex-shrink: 0; }
+
+    .back-btn {
+      background: transparent;
+      color: white;
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 20px;
+      padding: 4px 11px;
+      font-size: 11px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .back-btn:active { color: #ff1a1a; border-color: #ff1a1a; }
+
+    .hidden { display: none !important; }
+
+    /* ── PAGE SHELL ──────────────────────────────────────────── */
+    .page {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: absolute;
+      inset: 0;
+      top: 52px;
+      background: #07070d;
+    }
+
+    @keyframes slideInRight  { from { transform: translateX(40px);  opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideInLeft   { from { transform: translateX(-40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOutLeft  { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-40px); opacity: 0; } }
+    @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(40px);  opacity: 0; } }
+
+    .page-enter-r { animation: slideInRight  0.3s ease-out forwards; }
+    .page-enter-l { animation: slideInLeft   0.3s ease-out forwards; }
+    .page-exit-l  { animation: slideOutLeft  0.2s ease-in  forwards; }
+    .page-exit-r  { animation: slideOutRight 0.2s ease-in  forwards; }
+
+    /* ── SCROLLBARS ───────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #ff1a1a; border-radius: 2px; }
+
+    /* ── PAGE HEADER ─────────────────────────────────────────── */
+    .page-header { padding: 18px 18px 8px; flex-shrink: 0; }
+    .page-eyebrow { color: #ff1a1a; font-size: 10px; font-weight: bold; letter-spacing: 1px; }
+    .page-heading { color: white; font-size: 18px; font-weight: bold; margin-top: 3px; }
+
+    /* ── GALLERY ─────────────────────────────────────────────── */
+    .gallery-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 18px 18px 0;
+      flex-shrink: 0;
+      gap: 12px;
+    }
+    .search-field {
+      background: #07070d;
+      color: white;
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 20px;
+      padding: 7px 14px;
+      font-size: 12px;
+      outline: none;
+      width: 130px;
+      flex-shrink: 0;
+      transition: border-color 0.2s;
+    }
+    .search-field::placeholder { color: rgba(255,255,255,0.4); }
+    .search-field:focus { border-color: #ff1a1a; }
+
+    .movie-grid {
+      padding: 14px 18px 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+      gap: 14px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .movie-card {
+      background: #07070d;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      cursor: pointer;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(22px);
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .movie-card.visible { animation: cardAppear 0.45s ease-out forwards; }
+    .movie-card:active  { transform: scale(0.96) !important; }
+
+    @keyframes cardAppear {
+      from { opacity: 0; transform: translateY(22px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-poster {
+      height: 148px;
+      background: #0d0d15;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-initials {
+      font-size: 48px;
+      font-weight: bold;
+      color: rgba(255,255,255,0.07);
+      user-select: none;
+      pointer-events: none;
+    }
+    .card-genre-badge {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      color: #ff1a1a;
+      font-size: 9px;
+      font-weight: bold;
+      border: 1px solid #ff1a1a;
+      border-radius: 2px;
+      padding: 2px 6px;
+    }
+    .card-info { padding: 11px 11px 13px; background: #07070d; }
+    .card-title { color: white;  font-size: 13px; font-weight: bold; line-height: 1.3; }
+    .card-shows { color: rgba(255,255,255,0.55); font-size: 10px; margin-top: 4px; }
+
+    /* ── TIMES ───────────────────────────────────────────────── */
+    .time-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding: 8px 18px 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .time-chip {
+      background: #07070d;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 8px;
+      padding: 14px 18px;
+      cursor: pointer;
+      min-width: 140px;
+      text-align: center;
+      opacity: 0;
+      transform: scale(0.7);
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .time-chip.vip-chip { border-color: #ff1a1a; }
+    .time-chip.visible  { animation: chipAppear 0.32s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+    .time-chip:active   { transform: scale(0.96) !important; }
+
+    @keyframes chipAppear {
+      from { opacity: 0; transform: scale(0.7); }
+      to   { opacity: 1; transform: scale(1);   }
+    }
+
+    .vip-badge {
+      display: inline-block;
+      color: #ff1a1a;
+      font-size: 9px;
+      font-weight: bold;
+      border: 1px solid #ff1a1a;
+      border-radius: 10px;
+      padding: 2px 8px;
+      margin-bottom: 8px;
+    }
+    .chip-hall { color: rgba(255,255,255,0.65); font-size: 10px; font-weight: bold; }
+    .chip-time { color: white; font-size: 26px; font-weight: bold; margin: 4px 0; }
+    .chip-avail { font-size: 11px; }
+    .avail-ok  { color: rgba(255,255,255,0.65); }
+    .avail-low { color: #ff1a1a; }
+
+    /* ── SEATS ───────────────────────────────────────────────── */
+    .screen-wrapper {
+      padding: 8px 18px 0;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .screen-bar {
+      height: 3px;
+      background: rgba(255,255,255,0.75);
+      border-radius: 50%;
+      margin: 0 30px;
+      box-shadow: 0 0 18px rgba(255,255,255,0.35);
+    }
+    .screen-label { color: rgba(255,255,255,0.45); font-size: 10px; margin-top: 4px; }
+
+    .seat-scroll-outer { flex: 1; overflow: auto; padding: 10px 8px 8px; }
+
+    .seat-grid {
+      display: grid;
+      gap: 7px;
+      width: fit-content;
+      margin: 0 auto;
+    }
+
+    .row-lbl {
+      color: rgba(255,255,255,0.65);
+      font-size: 11px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+    }
+    .col-lbl {
+      color: rgba(255,255,255,0.45);
+      font-size: 9px;
+      text-align: center;
+      padding-bottom: 3px;
+    }
+
+    .seat-btn {
+      width: 28px;
+      height: 24px;
+      border-radius: 4px 4px 2px 2px;
+      border: none;
+      cursor: pointer;
+      opacity: 0;
+      transform: scale(0);
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .seat-btn.vip-seat { width: 44px; height: 36px; border-radius: 7px 7px 3px 3px; }
+    .seat-btn.available { background: #ff1a1a; }
+    .seat-btn.selected  { background: white; }
+    .seat-btn.booked    {
+      background: #000;
+      border: 1px solid rgba(255,255,255,0.35);
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .seat-btn.pop-in { animation: seatAppear 0.22s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+    @keyframes seatAppear {
+      from { opacity: 0; transform: scale(0); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes seatBounce {
+      0%  { transform: scale(1); }
+      38% { transform: scale(1.35); }
+      100%{ transform: scale(1); }
+    }
+    .seat-btn.bounce { animation: seatBounce 0.27s ease-out; }
+
+    .seat-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-top: 1px solid rgba(255,255,255,0.15);
+      background: #07070d;
+      flex-shrink: 0;
+      gap: 10px;
+    }
+    .legend { display: flex; align-items: center; gap: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: white; }
+    .legend-dot { width: 12px; height: 10px; border-radius: 2px 2px 1px 1px; flex-shrink: 0; }
+    .legend-dot.l-avail { background: #ff1a1a; }
+    .legend-dot.l-sel   { background: white; }
+    .legend-dot.l-taken { background: #000; border: 1px solid rgba(255,255,255,0.4); }
+
+    .counter-block { text-align: right; flex-shrink: 0; }
+    .counter-lbl   { color: rgba(255,255,255,0.6); font-size: 10px; }
+    .counter-price { color: #ff1a1a; font-size: 20px; font-weight: bold; }
+
+    .proceed-btn {
+      background: #ff1a1a;
+      color: white;
+      border: none;
+      border-radius: 22px;
+      padding: 9px 20px;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .proceed-btn:active { background: white; color: black; }
+
+    /* ── TICKET ──────────────────────────────────────────────── */
+    #ticket-page { overflow-y: auto; }
+
+    .ticket-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 16px 18px 24px;
+    }
+
+    .ticket {
+      background: white;
+      border-radius: 12px;
+      max-width: 340px;
+      width: 100%;
+      box-shadow: 0 0 50px rgba(255,26,26,0.35);
+      opacity: 0;
+      transform: translateY(40px) rotate(-3deg);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .ticket.revealed { opacity: 1; transform: translateY(0) rotate(0deg); }
+
+    .ticket-header {
+      background: #000;
+      padding: 18px 20px;
+      border-radius: 12px 12px 0 0;
+      text-align: center;
+    }
+    .ticket-brand { color: white;   font-size: 14px; font-weight: bold; }
+    .ticket-admit { color: #ff1a1a; font-size: 9px;  font-weight: bold; margin-top: 2px; }
+
+    .perforation { display: flex; align-items: center; background: white; height: 22px; }
+    .perf-notch  { width: 18px; height: 18px; background: #07070d; flex-shrink: 0; }
+    .perf-notch-l { border-radius: 0 9px 9px 0; }
+    .perf-notch-r { border-radius: 9px 0 0 9px; }
+    .perf-line    { flex: 1; border-bottom: 2px dashed rgba(0,0,0,0.18); }
+
+    .ticket-body { padding: 16px 18px 20px; border-radius: 0 0 12px 12px; }
+    .ticket-details {
+      color: black;
+      font-family: 'Courier New', monospace;
+      font-size: 11.5px;
+      line-height: 1.9;
+      white-space: pre;
+      overflow-x: auto;
+    }
+    .ticket-bottom {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-top: 14px;
+      gap: 10px;
+    }
+    .ticket-total-label { color: black; font-size: 9px; font-weight: bold; }
+    .ticket-total       { color: #ff1a1a; font-size: 26px; font-weight: bold; }
+
+    .qr-box {
+      background: white;
+      border: 1px solid #000;
+      border-radius: 6px;
+      padding: 7px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .qr-row   { color: black; font-size: 12px; font-family: monospace; line-height: 1.2; }
+    .qr-label { color: black; font-size: 7px; margin-top: 3px; }
+
+    .confirm-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 340px;
+    }
+    .confirm-btn {
+      background: #ff1a1a;
+      color: white;
+      border: none;
+      border-radius: 24px;
+      padding: 13px 40px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s, color 0.2s;
+    }
+    .confirm-btn:active { background: white; color: black; }
+
+    .edit-btn {
+      background: transparent;
+      color: rgba(255,255,255,0.6);
+      border: none;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 6px;
+    }
+    .edit-btn:active { color: #ff1a1a; }
+
+    /* ── SUCCESS ─────────────────────────────────────────────── */
+    #success-page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 16px;
+      padding: 40px 20px;
+    }
+    .success-check {
+      font-size: 88px;
+      color: #ff1a1a;
+      opacity: 0;
+      transform: scale(0);
+      transition: opacity 0.4s, transform 0.4s cubic-bezier(0.34,0.97,0.64,1);
+    }
+    .success-check.pop {
+      opacity: 1;
+      transform: scale(1);
+      animation: pulse 0.9s ease-in-out 0.7s infinite alternate;
+    }
+    @keyframes pulse {
+      from { transform: scale(1); }
+      to   { transform: scale(1.08); }
+    }
+    .success-title    { color: white; font-size: 22px; font-weight: bold; }
+    .success-subtitle { color: rgba(255,255,255,0.65); font-size: 13px; }
+
+    /* ── FADE-IN LAUNCH ──────────────────────────────────────── */
+    @keyframes appFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    #app { animation: appFadeIn 0.5s ease-out; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── HEADER ─────────────────────────────────────────────── -->
+  <header class="header-bar">
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span class="logo-cine">CINE</span><span class="logo-max">MAX</span>
+    </div>
+    <div class="step-bar">
+      <span class="step-item step-active"  id="s1">① MOVIES</span>
+      <div class="step-connector"></div>
+      <span class="step-item step-inactive" id="s2">② TIME</span>
+      <div class="step-connector"></div>
+      <span class="step-item step-inactive" id="s3">③ SEATS</span>
+      <div class="step-connector"></div>
+      <span class="step-item step-inactive" id="s4">④ CONFIRM</span>
+    </div>
+    <button class="back-btn hidden" id="backBtn" onclick="goBack()">← BACK</button>
+  </header>
+
+  <!-- ── GALLERY PAGE ───────────────────────────────────────── -->
+  <div id="gallery-page" class="page">
+    <div class="gallery-top">
+      <div>
+        <div class="page-eyebrow">NOW SHOWING</div>
+        <div class="page-heading">What are we watching?</div>
+      </div>
+      <input type="text" class="search-field" id="searchField"
+             placeholder="Search…" oninput="filterMovies(this.value)">
+    </div>
+    <div class="movie-grid" id="movieGrid"></div>
+  </div>
+
+  <!-- ── TIME PAGE ─────────────────────────────────────────── -->
+  <div id="time-page" class="page hidden">
+    <div class="page-header">
+      <div class="page-eyebrow">SELECT SHOWTIME</div>
+      <div class="page-heading" id="timeTitle"></div>
+    </div>
+    <div class="time-grid" id="timeGrid"></div>
+  </div>
+
+  <!-- ── SEAT PAGE ─────────────────────────────────────────── -->
+  <div id="seat-page" class="page hidden">
+    <div class="gallery-top" style="padding-bottom:0">
+      <div>
+        <div class="page-eyebrow">CHOOSE YOUR SEATS</div>
+        <div class="page-heading" id="seatTitle"></div>
+      </div>
+      <div class="counter-block">
+        <div class="counter-lbl"   id="cntLabel">No seats selected</div>
+        <div class="counter-price" id="cntPrice">$0.00</div>
+      </div>
+    </div>
+    <div class="screen-wrapper">
+      <div class="screen-bar"></div>
+      <div class="screen-label">— S C R E E N —</div>
+    </div>
+    <div class="seat-scroll-outer">
+      <div class="seat-grid" id="seatGrid"></div>
+    </div>
+    <div class="seat-footer">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot l-avail"></div>Available</div>
+        <div class="legend-item"><div class="legend-dot l-sel"></div>Selected</div>
+        <div class="legend-item"><div class="legend-dot l-taken"></div>Taken</div>
+      </div>
+      <button class="proceed-btn" onclick="showTicket()">CHECKOUT →</button>
+    </div>
+  </div>
+
+  <!-- ── TICKET PAGE ────────────────────────────────────────── -->
+  <div id="ticket-page" class="page hidden">
+    <div class="ticket-wrapper">
+      <div class="ticket" id="ticket">
+        <div class="ticket-header">
+          <div class="ticket-brand">◈ CINEMAMAX</div>
+          <div class="ticket-admit">ADMIT ONE</div>
+        </div>
+        <div class="perforation">
+          <div class="perf-notch perf-notch-l"></div>
+          <div class="perf-line"></div>
+          <div class="perf-notch perf-notch-r"></div>
+        </div>
+        <div class="ticket-body">
+          <pre class="ticket-details" id="ticketDetails"></pre>
+          <div class="ticket-bottom">
+            <div>
+              <div class="ticket-total-label">TOTAL AMOUNT</div>
+              <div class="ticket-total" id="ticketTotal">$0</div>
+            </div>
+            <div class="qr-box">
+              <div class="qr-row">█▀█▀██▀█▀█</div>
+              <div class="qr-row">▀ █ ▀▀ █ ▀</div>
+              <div class="qr-row">█▄█▄██▄█▄█</div>
+              <div class="qr-row">▄ ▀ ▄▄ ▀ ▄</div>
+              <div class="qr-row">█▀▄▀██▀▄▀█</div>
+              <div class="qr-label">SCAN TO ENTER</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="confirm-panel">
+        <button class="confirm-btn" onclick="confirmBooking()">✓  CONFIRM BOOKING</button>
+        <button class="edit-btn"    onclick="goBack()">← Edit Seats</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SUCCESS PAGE ───────────────────────────────────────── -->
+  <div id="success-page" class="page hidden">
+    <div class="success-check" id="successIcon">✓</div>
+    <div class="success-title">BOOKING CONFIRMED!</div>
+    <div class="success-subtitle">Your tickets are ready. Enjoy the movie!</div>
+    <br>
+    <button class="proceed-btn" onclick="showGallery()">← BACK TO MOVIES</button>
+  </div>
+
+</div><!-- #app -->
+
+<script>
+// ── Telegram Mini App SDK ─────────────────────────────────────
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+// ── Demo data (mirrors Java fallback) ────────────────────────
+const MOVIES = [
+  {id: 1, title:'The Dark Knight',            genre:'ACTION',    blockbuster:true,  shows:4},
+  {id: 2, title:'Interstellar',               genre:'SCI-FI',    blockbuster:true,  shows:4},
+  {id: 3, title:'Inception',                  genre:'THRILLER',  blockbuster:true,  shows:4},
+  {id: 4, title:'The Matrix',                 genre:'SCI-FI',    blockbuster:false, shows:3},
+  {id: 5, title:'Oppenheimer',                genre:'DRAMA',     blockbuster:true,  shows:4},
+  {id: 6, title:'Dune: Part Two',             genre:'SCI-FI',    blockbuster:true,  shows:4},
+  {id: 7, title:'Gladiator II',               genre:'ACTION',    blockbuster:true,  shows:4},
+  {id: 8, title:'John Wick 4',                genre:'ACTION',    blockbuster:false, shows:3},
+  {id: 9, title:'Spider-Man: Spider-Verse',   genre:'ANIMATION', blockbuster:false, shows:3},
+  {id:10, title:'Avatar: Way of Water',       genre:'SCI-FI',    blockbuster:true,  shows:4},
+  {id:11, title:'Pulp Fiction',               genre:'CRIME',     blockbuster:false, shows:3},
+  {id:12, title:'The Godfather',              genre:'CRIME',     blockbuster:false, shows:3},
+  {id:13, title:'Seven',                      genre:'THRILLER',  blockbuster:false, shows:3},
+  {id:14, title:'Fight Club',                 genre:'DRAMA',     blockbuster:false, shows:3},
+  {id:15, title:'Forrest Gump',               genre:'DRAMA',     blockbuster:false, shows:3},
+  {id:16, title:'The Lion King',              genre:'ANIMATION', blockbuster:false, shows:3},
+  {id:17, title:'Joker: Folie à Deux',        genre:'DRAMA',     blockbuster:true,  shows:4},
+  {id:18, title:'Deadpool & Wolverine',       genre:'ACTION',    blockbuster:true,  shows:4},
+  {id:19, title:'Iron Man',                   genre:'ACTION',    blockbuster:false, shows:3},
+  {id:20, title:'The Avengers',               genre:'ACTION',    blockbuster:true,  shows:4},
+  {id:21, title:'Parasite',                   genre:'THRILLER',  blockbuster:false, shows:3},
+  {id:22, title:'Spirited Away',              genre:'ANIMATION', blockbuster:false, shows:3},
+  {id:23, title:'Mad Max: Fury Road',         genre:'ACTION',    blockbuster:false, shows:3},
+  {id:24, title:'Top Gun: Maverick',          genre:'ACTION',    blockbuster:true,  shows:4},
+  {id:25, title:'Blade Runner 2049',          genre:'SCI-FI',    blockbuster:false, shows:3},
+  {id:26, title:'The Prestige',               genre:'THRILLER',  blockbuster:false, shows:3},
+  {id:27, title:'Whiplash',                   genre:'DRAMA',     blockbuster:false, shows:3},
+  {id:28, title:'Coco',                       genre:'ANIMATION', blockbuster:false, shows:3},
+  {id:29, title:'Arrival',                    genre:'SCI-FI',    blockbuster:false, shows:3},
+  {id:30, title:'Alien: Romulus',             genre:'HORROR',    blockbuster:true,  shows:4},
+];
+
+// Showtimes are generated per-movie based on blockbuster status,
+// matching the DB: Hall A 11:00, Hall B 15:30, Hall C 19:00 (+VIP 22:00 if blockbuster)
+function getShowtimesForMovie(movie) {
+  const base = [
+    {id: movie.id*10+1, hall:'Hall A',       time:'11:00', vip:false, avail: lcgAvail(movie.id*10+1)},
+    {id: movie.id*10+2, hall:'Hall B',       time:'15:30', vip:false, avail: lcgAvail(movie.id*10+2)},
+    {id: movie.id*10+3, hall:'Hall C',       time:'19:00', vip:false, avail: lcgAvail(movie.id*10+3)},
+  ];
+  if (movie.blockbuster) {
+    base.push({id: movie.id*10+4, hall:'VIP Platinum', time:'22:00', vip:true, avail: lcgAvail(movie.id*10+4)});
+  }
+  return base;
+}
+function lcgAvail(seed) {
+  let s = seed & 0x7fffffff;
+  s = (Math.imul(s, 1664525) + 1013904223) & 0x7fffffff;
+  return 8 + (s % 68); // 8–75 seats available
+}
+
+// Legacy SHOWTIMES kept for reference (replaced by getShowtimesForMovie)
+const SHOWTIMES = [];
+
+// ── App state ─────────────────────────────────────────────────
+const S = {
+  page: 'gallery',
+  movie: null,
+  showtime: null,
+  selected: new Set(),   // "row-col" strings
+  booked: new Set(),
+};
+
+// ── Navigation ────────────────────────────────────────────────
+const PAGE_RANK = {gallery:0, time:1, seat:2, ticket:3, success:4};
+
+function showPage(id, dir) {
+  const prev = document.getElementById(S.page + '-page');
+  const next = document.getElementById(id + '-page');
+  if (!next || prev === next) return;
+
+  if (prev) {
+    prev.classList.add(dir > 0 ? 'page-exit-l' : 'page-exit-r');
+    setTimeout(() => {
+      prev.classList.add('hidden');
+      prev.classList.remove('page-exit-l','page-exit-r');
+    }, 200);
+  }
+
+  next.classList.remove('hidden');
+  next.classList.add(dir > 0 ? 'page-enter-r' : 'page-enter-l');
+  setTimeout(() => next.classList.remove('page-enter-r','page-enter-l'), 320);
+
+  S.page = id;
+  document.getElementById('backBtn').classList.toggle('hidden', id === 'gallery' || id === 'success');
+}
+
+function goBack() {
+  if      (S.page === 'time')    showGallery();
+  else if (S.page === 'seat')  { setStep(2); showPage('time',   -1); }
+  else if (S.page === 'ticket'){ setStep(3); showPage('seat',   -1); }
+  else if (S.page === 'success') showGallery();
+}
+
+// ── Step bar ──────────────────────────────────────────────────
+function setStep(active) {
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById('s'+i);
+    el.className = 'step-item ' + (i < active ? 'step-done' : i === active ? 'step-active' : 'step-inactive');
+  });
+}
+
+// ── Gallery ───────────────────────────────────────────────────
+function showGallery() {
+  setStep(1);
+  S.selected.clear();
+  showPage('gallery', -1);
+  renderGallery();
+}
+
+function renderGallery() {
+  const grid = document.getElementById('movieGrid');
+  grid.innerHTML = '';
+  MOVIES.forEach((m, i) => {
+    const initials = m.title.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+    const card = document.createElement('div');
+    card.className = 'movie-card';
+    card.dataset.t = m.title.toLowerCase();
+    card.innerHTML = `
+      <div class="card-poster">
+        <span class="card-initials">${initials}</span>
+        <span class="card-genre-badge">${m.genre}</span>
+      </div>
+      <div class="card-info">
+        <div class="card-title">${m.title}</div>
+        <div class="card-shows">${m.shows} SHOWINGS ›</div>
+      </div>`;
+    card.addEventListener('click', () => {
+      card.style.transform = 'scale(0.96)';
+      setTimeout(() => { card.style.transform = ''; selectMovie(m); }, 120);
+    });
+    grid.appendChild(card);
+    setTimeout(() => card.classList.add('visible'), i * 90);
+  });
+}
+
+function filterMovies(q) {
+  q = q.toLowerCase().trim();
+  document.querySelectorAll('.movie-card').forEach(c => {
+    const show = !q || c.dataset.t.includes(q);
+    c.style.display = show ? '' : 'none';
+  });
+}
+
+// ── Showtimes ─────────────────────────────────────────────────
+function selectMovie(movie) {
+  S.movie = movie;
+  document.getElementById('timeTitle').textContent = movie.title;
+  setStep(2);
+  showPage('time', 1);
+  renderTimes();
+}
+
+function renderTimes() {
+  const grid = document.getElementById('timeGrid');
+  grid.innerHTML = '';
+  getShowtimesForMovie(S.movie).forEach((s, i) => {
+    const low = s.avail < 15;
+    const chip = document.createElement('div');
+    chip.className = 'time-chip' + (s.vip ? ' vip-chip' : '');
+    chip.innerHTML = `
+      ${s.vip ? '<div class="vip-badge">★ VIP PLATINUM</div>' : ''}
+      <div class="chip-hall">${s.hall.toUpperCase()}</div>
+      <div class="chip-time">${s.time}</div>
+      <div class="chip-avail ${low ? 'avail-low':'avail-ok'}">${s.avail} seats left</div>`;
+    chip.addEventListener('click', () => selectShowtime(s));
+    grid.appendChild(chip);
+    setTimeout(() => chip.classList.add('visible'), i * 110);
+  });
+}
+
+// ── Seats ─────────────────────────────────────────────────────
+function selectShowtime(st) {
+  S.showtime = st;
+  S.selected.clear();
+
+  const rows = st.vip ? 4 : 8;
+  const cols = st.vip ? 6 : 12;
+  S.booked = genBooked(st.id, rows, cols);
+
+  document.getElementById('seatTitle').textContent =
+    S.movie.title + (st.vip ? '  ★ VIP' : '');
+  updateCounter();
+  setStep(3);
+  showPage('seat', 1);
+  renderSeats(rows, cols);
+}
+
+// LCG seeded random — same distribution as Java's new Random(seed)
+function lcg(seed) {
+  let s = seed & 0x7fffffff;
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) & 0x7fffffff; return s / 0x7fffffff; };
+}
+function genBooked(seed, rows, cols) {
+  const rng = lcg(seed), set = new Set();
+  for (let r=0; r<rows; r++)
+    for (let c=0; c<cols; c++)
+      if (rng() < 0.28) set.add(r+'-'+c);
+  return set;
+}
+
+function renderSeats(rows, cols) {
+  const grid = document.getElementById('seatGrid');
+  const vip = S.showtime.vip;
+  const hasAisle = cols > 8;
+  const w = vip ? 44 : 28;
+  const aisleW = hasAisle ? '14px' : null;
+
+  // Build grid-template-columns
+  let tplCols = '24px ';  // row label
+  for (let c=0; c<cols; c++) {
+    if (hasAisle && c === cols/2) tplCols += aisleW + ' ';
+    tplCols += w + 'px ';
+  }
+  grid.style.gridTemplateColumns = tplCols.trim();
+  grid.innerHTML = '';
+
+  // Header row
+  grid.appendChild(mkDiv(''));  // top-left corner
+  for (let c=0; c<cols; c++) {
+    if (hasAisle && c === cols/2) grid.appendChild(mkDiv(''));
+    const lbl = mkDiv(String(c+1));
+    lbl.className = 'col-lbl';
+    lbl.style.width = w + 'px';
+    grid.appendChild(lbl);
+  }
+
+  // Seat rows
+  let wave = 0;
+  for (let r=0; r<rows; r++) {
+    const rowLbl = mkDiv(String.fromCharCode(65+r));
+    rowLbl.className = 'row-lbl';
+    grid.appendChild(rowLbl);
+
+    for (let c=0; c<cols; c++) {
+      if (hasAisle && c === cols/2) grid.appendChild(mkDiv(''));
+
+      const pos = r+'-'+c;
+      const btn = document.createElement('button');
+      btn.className = 'seat-btn' + (vip ? ' vip-seat':'');
+      btn.title = 'Seat ' + String.fromCharCode(65+r) + (c+1);
+
+      if (S.booked.has(pos)) {
+        btn.classList.add('booked');
+        btn.disabled = true;
+      } else {
+        btn.classList.add('available');
+        btn.addEventListener('click', () => toggleSeat(btn, pos));
+      }
+
+      const delay = wave * 12;
+      setTimeout(() => btn.classList.add('pop-in'), delay);
+      wave++;
+      grid.appendChild(btn);
+    }
+  }
+}
+
+function toggleSeat(btn, pos) {
+  if (S.selected.has(pos)) {
+    S.selected.delete(pos);
+    btn.classList.replace('selected','available');
+  } else {
+    S.selected.add(pos);
+    btn.classList.replace('available','selected');
+    btn.classList.remove('bounce');
+    void btn.offsetWidth;
+    btn.classList.add('bounce');
+    setTimeout(() => btn.classList.remove('bounce'), 300);
+  }
+  updateCounter();
+}
+
+function updateCounter() {
+  const n = S.selected.size;
+  const price = S.showtime?.vip ? 50 : 20;
+  document.getElementById('cntLabel').textContent =
+    n === 0 ? 'No seats selected' : `${n} seat${n>1?'s':''} selected`;
+  document.getElementById('cntPrice').textContent = `$${n * price}.00`;
+}
+
+// ── Ticket ────────────────────────────────────────────────────
+function showTicket() {
+  if (S.selected.size === 0) { shakeEl('seatGrid'); return; }
+
+  const labels = [...S.selected].map(pos => {
+    const [r,c] = pos.split('-').map(Number);
+    return String.fromCharCode(65+r) + (c+1);
+  }).sort();
+
+  const price = S.showtime.vip ? 50 : 20;
+  const total = S.selected.size * price;
+  const hall  = S.showtime.vip ? 'PLATINUM ★' : S.showtime.hall.toUpperCase();
+
+  document.getElementById('ticketDetails').textContent =
+    `FILM    ${S.movie.title.toUpperCase()}\n` +
+    `HALL    ${hall}\n` +
+    `TIME    ${S.showtime.time}\n` +
+    `SEATS   ${labels.join('  ')}\n` +
+    `TICKETS ${S.selected.size} × $${price}.00`;
+
+  document.getElementById('ticketTotal').textContent = `$${total}.00`;
+
+  setStep(4);
+  showPage('ticket', 1);
+
+  const tk = document.getElementById('ticket');
+  tk.classList.remove('revealed');
+  setTimeout(() => tk.classList.add('revealed'), 250);
+}
+
+// ── Confirm / success ─────────────────────────────────────────
+function confirmBooking() {
+  S.selected.forEach(p => S.booked.add(p));
+  S.selected.clear();
+
+  document.getElementById('backBtn').classList.add('hidden');
+  showPage('success', 1);
+
+  setTimeout(() => document.getElementById('successIcon').classList.add('pop'), 300);
+
+  // Optionally send data back to bot
+  if (tg?.sendData) {
+    try { tg.sendData(JSON.stringify({status:'booked', movie: S.movie?.title})); } catch(e){}
+  }
+}
+
+// ── Utilities ─────────────────────────────────────────────────
+function mkDiv(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d;
+}
+
+function shakeEl(id) {
+  const el = document.getElementById(id);
+  let n = 0;
+  const iv = setInterval(() => {
+    el.style.transform = n%2 === 0 ? 'translateX(10px)' : 'translateX(-10px)';
+    if (++n >= 6) { clearInterval(iv); el.style.transform = ''; }
+  }, 70);
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+renderGallery();
+</script>
+</body>
+</html>
